@@ -6,44 +6,81 @@
 
 <style>
 body {
-    background:#2b2d31;
-    color:#dbdee1;
-    font-family:Arial;
-    margin:0;
+    margin: 0;
+    background: #2b2d31;
+    color: #dbdee1;
+    font-family: Arial, sans-serif;
 }
+
+#container {
+    max-width: 700px;
+    margin: auto;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+#header {
+    padding: 12px;
+    background: #1e1f22;
+    font-weight: bold;
+}
+
 #chat {
-    height:300px;
-    overflow:auto;
-    padding:10px;
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
 }
-.msg { margin-bottom:6px; }
-.nick { color:#4ea1ff; font-weight:bold; }
-#controls {
-    padding:10px;
-    background:#1e1f22;
+
+.msg {
+    margin-bottom: 6px;
 }
-video {
-    width:100%;
-    max-height:300px;
-    background:#000;
+
+.nick {
+    color: #4ea1ff;
+    font-weight: bold;
+}
+
+#input-area {
+    display: flex;
+    padding: 10px;
+    background: #1e1f22;
+}
+
+#input-area input {
+    flex: 1;
+    background: #383a40;
+    border: none;
+    color: #fff;
+    padding: 8px;
+}
+
+#input-area button {
+    margin-left: 8px;
+    padding: 8px 14px;
+    background: #5865f2;
+    border: none;
+    color: white;
+    cursor: pointer;
 }
 </style>
 </head>
+
 <body>
 
-<div id="chat"></div>
+<div id="container">
+    <div id="header">Chat</div>
+    <div id="chat"></div>
 
-<video id="screen" autoplay playsinline></video>
-
-<div id="controls">
-<input id="msg" placeholder="Mensagem">
-<input type="file" id="file">
-<button onclick="send()">Enviar</button>
-<button onclick="shareScreen()">Compartilhar tela</button>
+    <div id="input-area">
+        <input id="msg" placeholder="Mensagem">
+        <button onclick="send()">Enviar</button>
+    </div>
 </div>
 
 <script>
 let nick = localStorage.getItem("nick");
+
 while (!nick) {
     const n = prompt("Escolha um nick:");
     if (n) {
@@ -52,102 +89,35 @@ while (!nick) {
     }
 }
 
+const chat = document.getElementById("chat");
+const input = document.getElementById("msg");
+
 const ws = new WebSocket(
     (location.protocol === "https:" ? "wss://" : "ws://") + location.host
 );
 
-const chat = document.getElementById("chat");
-const input = document.getElementById("msg");
-const video = document.getElementById("screen");
-
-let pc;
-
-// ===== RECEBE MENSAGENS
-ws.onmessage = async e => {
+ws.onmessage = e => {
     const data = JSON.parse(e.data);
-
-    if (data.type === "chat") {
-        addMsg(data.nick, data.text, data.file);
-    }
-
-    if (data.type === "offer") {
-        pc = createPeer();
-        await pc.setRemoteDescription(data.offer);
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        ws.send(JSON.stringify({ type:"answer", answer }));
-    }
-
-    if (data.type === "answer") {
-        await pc.setRemoteDescription(data.answer);
-    }
-
-    if (data.type === "ice") {
-        await pc.addIceCandidate(data.ice);
-    }
+    addMsg(data.nick, data.text);
 };
 
-function addMsg(n, t, file) {
+function addMsg(n, t) {
     const div = document.createElement("div");
     div.className = "msg";
-    let html = `<span class="nick">${n}</span>: ${t || ""}`;
-
-    if (file) {
-        html += `<br><a href="${file}" target="_blank">${file}</a>`;
-    }
-
-    div.innerHTML = html;
+    div.innerHTML = `<span class="nick">${n}</span>: ${t}`;
     chat.appendChild(div);
     chat.scrollTop = chat.scrollHeight;
 }
 
-// ===== ENVIO
-async function send() {
-    let fileUrl = null;
-    const f = document.getElementById("file").files[0];
-
-    if (f) {
-        const fd = new FormData();
-        fd.append("file", f);
-        const r = await fetch("/upload", { method:"POST", body:fd });
-        const j = await r.json();
-        fileUrl = j.url;
-        document.getElementById("file").value = "";
-    }
+function send() {
+    if (!input.value.trim()) return;
 
     ws.send(JSON.stringify({
-        type:"chat",
-        nick,
-        text: input.value,
-        file: fileUrl
+        nick: nick,
+        text: input.value
     }));
 
     input.value = "";
-}
-
-// ===== WEBRTC (tela)
-function createPeer() {
-    const pc = new RTCPeerConnection();
-    pc.ontrack = e => video.srcObject = e.streams[0];
-    pc.onicecandidate = e => {
-        if (e.candidate) {
-            ws.send(JSON.stringify({ type:"ice", ice:e.candidate }));
-        }
-    };
-    return pc;
-}
-
-async function shareScreen() {
-    const stream = await navigator.mediaDevices.getDisplayMedia({ video:true });
-    video.srcObject = stream;
-
-    pc = createPeer();
-    stream.getTracks().forEach(t => pc.addTrack(t, stream));
-
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-
-    ws.send(JSON.stringify({ type:"offer", offer }));
 }
 </script>
 
