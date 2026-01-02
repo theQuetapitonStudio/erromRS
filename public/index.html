@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>Chat simples</title>
+</head>
+<body>
+
+<h2>Chat</h2>
+
+<div id="chat" style="height:300px;overflow:auto;border:1px solid #000;"></div>
+
+<input id="msg" placeholder="Digite algo">
+<button onclick="enviar()">Enviar</button>
+
+<script>
+const chat = document.getElementById("chat");
+const input = document.getElementById("msg");
+
+// detecta ws ou wss automaticamente
+const protocolo = location.protocol === "https:" ? "wss" : "ws";
+const ws = new WebSocket(protocolo + "://" + location.host);
+
+ws.onmessage = (e) => {
+    const div = document.createElement("div");
+    div.textContent = e.data;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+};
+
+function enviar() {
+    if (input.value.trim() !== "") {
+        ws.send(input.value);
+        input.value = "";
+    }
+}
+</script>
+
+</body>
+</html>
